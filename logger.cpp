@@ -7,7 +7,16 @@
 #include <time.h>
 using namespace std;
 
+/*
+ * TODO
+ * - thread safe
+ * - independent on os
+ */
 
+
+//////////////////////////////////////////////////////////////////////////////////////
+// class MyLogger
+//
 class MyLogger
 {
 public:
@@ -159,6 +168,10 @@ wstring MyLogger::GetLogFilePathW(const wstring& wlogname)
 #endif
 
 
+
+//////////////////////////////////////////////////////////////////////////////////////
+// main function
+//
 int main()
 {
 	// logging
