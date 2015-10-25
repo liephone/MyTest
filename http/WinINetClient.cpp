@@ -11,17 +11,16 @@ using namespace std;
 
 
 WinINet::WinINet(HINTERNET handle)
-	: m_handle(handle),
+	: m_session(handle),
 	  m_logger(NULL)
 {
 	m_logger = new LogUtil("wininetclient");
-	m_logger->Log("[WinINet] created..");
+	m_logger->Log("\n[WinINet] created..");
 }
 
 WinINet::~WinINet()
 {
 	m_logger->Log("[WinINet] destroy..");
-	close();
 	if (m_logger != NULL) {
 		delete m_logger;
 		m_logger = NULL;
@@ -30,19 +29,25 @@ WinINet::~WinINet()
 
 string WinINet::Get(const string& url)
 {
-	if (m_handle == NULL) {
-		m_logger->Log("[WinINet] GET::handle is NULL !!!");
+	m_logger->Log("[WinINet] HTTP GET : <%s>", url.c_str());
+
+	if (m_session.isNull()) {
+		m_logger->Log("[WinINet] GET::session is NULL !!!");
 		open();
 	}
 
 	int port = 0;
 	string protocol, server, path, param;
 	parseUrl(url, protocol, server, path, param, port);
+	path += param;
 
-	m_handle = ::InternetConnectA(m_handle, server.c_str(), port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
-	if (m_handle == NULL) {
-		//throw NetworkException(ErrorCode::SH_C_CONNECTION,GetLastError());
+	//m_logger->Log("[WinINet] GET::parseUrl : protocol[%s] server[%s] path[%s] param[%s] port[%d]", protocol.c_str(), server.c_str(), path.c_str(), param.c_str(), port);
+
+	HttpHandler hConnect;
+	hConnect = ::InternetConnectA(m_session.get(), server.c_str(), port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+	if (hConnect.isNull()) {
 		m_logger->Log("[WinINet][ERROR] GET::InternetConnect() failed !!!]");
+		//throw NetworkException(ErrorCode::SH_C_CONNECTION,GetLastError());
 	} else {
 		m_logger->Log("[WinINet] GET::InternetConnect() ok.");
 	}
@@ -54,10 +59,11 @@ string WinINet::Get(const string& url)
 		flag |= (INTERNET_FLAG_SECURE | INTERNET_FLAG_IGNORE_CERT_CN_INVALID | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID);
 	}
 
-	m_handle = ::HttpOpenRequestA(m_handle, NULL, path.c_str(), "HTTP/1.0", server.c_str(), NULL, flag, 0);
-	if (m_handle == NULL) {
-		//throw NetworkException(ErrorCode::SH_C_REQUEST,0,string(""),string(""));
+	HttpHandler hRequest;
+	hRequest = ::HttpOpenRequestA(hConnect.get(), NULL, path.c_str(), "HTTP/1.1", server.c_str(), NULL, flag, 0);
+	if (hRequest.isNull()) {
 		m_logger->Log("[WinINet][ERROR] GET::HttpOpenRequest() failed !!!)");
+		//throw NetworkException(ErrorCode::SH_C_REQUEST,0,string(""),string(""));
 	} else {
 		m_logger->Log("[WinINet] GET::HttpOpenRequest() ok.");
 	}
@@ -71,49 +77,49 @@ string WinINet::Get(const string& url)
 			SECURITY_FLAG_IGNORE_CERT_DATE_INVALID |
 			SECURITY_FLAG_IGNORE_CERT_CN_INVALID;
 
-		::InternetSetOptionA(m_handle, INTERNET_OPTION_SECURITY_FLAGS, &dwSecurity, sizeof(dwSecurity));
+		::InternetSetOptionA(hRequest.get(), INTERNET_OPTION_SECURITY_FLAGS, &dwSecurity, sizeof(dwSecurity));
 	}
 
 	BOOL bSendReq = FALSE;
-	bSendReq = ::HttpSendRequestA(m_handle, NULL, 0, NULL, 0);
+	bSendReq = ::HttpSendRequestA(hRequest.get(), NULL, 0, NULL, 0);
 	if (!bSendReq) {
-		bSendReq = ::HttpSendRequestA(m_handle, NULL, 0, NULL, 0);
+		bSendReq = ::HttpSendRequestA(hRequest.get(), NULL, 0, NULL, 0);
 	}
 	if (!bSendReq) {
-		//throw NetworkException(ErrorCode::SH_C_REQUEST,GetLastError(),string(""),string(""));
 		m_logger->Log("[WinINet][ERROR] GET::HttpSendRequest() failed !!!");	// error code
+		//throw NetworkException(ErrorCode::SH_C_REQUEST,GetLastError(),string(""),string(""));
 	}
 
 	m_logger->Log("[WinINet] GET::HttpSendRequest() ok.");
 	
 
-	int statuscode = getStatusCode();
+	int statuscode = getStatusCode(hRequest.get());
 	if (statuscode != HTTP_STATUS_OK) {
-		//debug() << "WinHttp::get : Code " << statuscode;
-		string res = readData();
-		//debug() << "WinHttp::get : Receive " << res;
-		//throw NetworkException(ErrorCode::SH_C_HTTPOK,statuscode,string(""),string(""));
+		string fail_res = readData(hRequest.get());
+		m_logger->Log("[WinINet][ERROR] GET::read data [%d]\n[%s]", fail_res.size(), fail_res.c_str());
 		m_logger->Log("[WinINet][ERROR] GET::HTTP status failed !!!");
+		//throw NetworkException(ErrorCode::SH_C_HTTPOK,statuscode,string(""),string(""));
 	}
 
 	m_logger->Log("[WinINet] GET::status code [%d]", statuscode);
-	string res = readData();
+	string res = readData(hRequest.get());
 	m_logger->Log("[WinINet] GET::read data [%d]\n[%s]", res.size(), res.c_str());
-	close();
 
 	return res;
 }
 
-string WinINet::Post(const string& url, map<string, string>& data)
+string WinINet::Post(const string& url, const map<string, string>& data)
 {
-	string strData = URLCodec::encodeFromMap(mapData);
+	m_logger->Log("[WinINet] HTTP POST : <%s>", url.c_str());
+	
+	string strData = URLCodec::encodeFromMap(data);
 	string res = post(url, strData);
 	return res;
 }
 
 string WinINet::post(const string& url, const string& data)
 {
-	if (m_handle == NULL) {
+	if (m_session.isNull()) {
 		m_logger->Log("[WinINet] POST::handle is NULL !!!");
 		open();
 	}
@@ -122,10 +128,12 @@ string WinINet::post(const string& url, const string& data)
 	string protocol, server, path, param;
 	parseUrl(url, protocol, server, path, param, port);
 
-	m_handle = ::InternetConnectA(m_handle, server.c_str(), port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
-	if (m_handle == NULL) {
-		//throw NetworkException(ErrorCode::SH_C_CONNECTION,GetLastError());
+	//m_logger->Log("[WinINet] POST::parseUrl : protocol[%s] server[%s] path[%s] param[%s] port[%d]", protocol.c_str(), server.c_str(), path.c_str(), param.c_str(), port);
+
+	HttpHandler hConnect(::InternetConnectA(m_session.get(), server.c_str(), port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0));
+	if (hConnect.isNull()) {
 		m_logger->Log("[WinINet][ERROR] POST::InternetConnect() failed !!!");
+		//throw NetworkException(ErrorCode::SH_C_CONNECTION,GetLastError());
 	} else {
 		m_logger->Log("[WinINet] POST::InternetConnect() ok.");
 	}
@@ -140,10 +148,10 @@ string WinINet::post(const string& url, const string& data)
 				INTERNET_FLAG_IGNORE_CERT_DATE_INVALID);
 	}
 
-	m_handle = ::HttpOpenRequestA(m_handle, "POST", path.c_str(), "HTTP/1.0", server.c_str(), NULL, flag, 0);
-	if (m_handle == NULL) {
-		//throw NetworkException(ErrorCode::SH_C_REQUEST,0,string(""),string(""));
+	HttpHandler hRequest(::HttpOpenRequestA(hConnect.get(), "POST", path.c_str(), "HTTP/1.1", server.c_str(), NULL, flag, 0));
+	if (hRequest.isNull()) {
 		m_logger->Log("[WinINet][ERROR] POST::HttpOpenRequest() failed !!!");
+		//throw NetworkException(ErrorCode::SH_C_REQUEST,0,string(""),string(""));
 	} else {
 		m_logger->Log("[WinINet] POST::HttpOpenRequest() ok.");
 	}
@@ -157,68 +165,58 @@ string WinINet::post(const string& url, const string& data)
 					SECURITY_FLAG_IGNORE_CERT_DATE_INVALID |
 					SECURITY_FLAG_IGNORE_CERT_CN_INVALID;
 
-		::InternetSetOptionA(m_handle, INTERNET_OPTION_SECURITY_FLAGS, &dwSecurity, sizeof(dwSecurity));
+		::InternetSetOptionA(hRequest.get(), INTERNET_OPTION_SECURITY_FLAGS, &dwSecurity, sizeof(dwSecurity));
 	}
 
 	string header = ("Content-Type: application/x-www-form-urlencoded");
 	BOOL bSendReq = FALSE;
-	bSendReq = ::HttpSendRequestA(m_handle, header.c_str(), header.size(), (LPVOID)data.c_str(), (DWORD)data.size());
+	bSendReq = ::HttpSendRequestA(hRequest.get(), header.c_str(), header.size(), (LPVOID)data.c_str(), (DWORD)data.size());
 	if (!bSendReq){
-		bSendReq = ::HttpSendRequestA(m_handle, header.c_str(), header.size(), (LPVOID)data.c_str(), (DWORD)data.size());
+		bSendReq = ::HttpSendRequestA(hRequest.get(), header.c_str(), header.size(), (LPVOID)data.c_str(), (DWORD)data.size());
 	}
 	if (!bSendReq) {
-		//throw NetworkException(ErrorCode::SH_C_REQUEST,GetLastError(),string(""),string(""));
 		m_logger->Log("[WinINet][ERROR] POST::HttpSendRequest() failed !!!");
+		//throw NetworkException(ErrorCode::SH_C_REQUEST,GetLastError(),string(""),string(""));
 	}
 	m_logger->Log("[WinINet] POST::HttpSendRequest() ok.");
 
-	int statuscode = getStatusCode();
+	int statuscode = getStatusCode(hRequest.get());
 	if (statuscode != HTTP_STATUS_OK) {
-		//debug() << "WinHttp::get : Code " << statuscode;
-		string res = readData(hHttp.get());
-		//debug() << "WinHttp::get : Receive " << res;
-		//throw NetworkException(ErrorCode::SH_C_HTTPOK,statuscode,string(""),string(""));
 		m_logger->Log("[WinINet][ERROR] POST::HTTP status failed !!!");
+		string fail_res = readData(hRequest.get());
+		m_logger->Log("[WinINet][ERROR] POST::read data [%d]\n[%s]", fail_res.size(), fail_res.c_str());
+		//throw NetworkException(ErrorCode::SH_C_HTTPOK,statuscode,string(""),string(""));
 	}
 
 	m_logger->Log("[WinINet] POST::status code [%d]", statuscode);
-	string res = readData();
+	string res = readData(hRequest.get());
 	m_logger->Log("[WinINet] POST::read data [%d]\n[%s]", res.size(), res.c_str());
 	return res;
 }
 
 bool WinINet::open()
 {
-	m_handle = ::InternetOpenA(CLIENT_NAME, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
-	if (m_handle == NULL) {
+	m_session = ::InternetOpenA(CLIENT_NAME, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+	if (m_session.isNull()) {
+		m_logger->Log("[WinINet][ERROR] Open::InternetOpen() fail !!!]");
 		// throw NetworkException(..)
-		m_logger->Log("open : Exception throw [InternetOpen fail !!!]");
 		return false;
 	} else {
-		m_logger->Log("open : InternetOpen() ok.");
+		m_logger->Log("[WinINet] Open::InternetOpen() ok.");
 		
 		return true;
 	}
 }
 
-void WinINet::close()
-{
-	if (m_handle != NULL) {
-		::InternetCloseHandle(m_handle);
-		m_logger->Log("close : InternetCloseHandle() ok.\n");
-		m_handle = NULL;
-	}
-}
-
-int WinINet::getStatusCode()
+int WinINet::getStatusCode(HINTERNET handle)
 {
 	DWORD dwCode = 0;
 	DWORD szCode = sizeof(dwCode);
-	::HttpQueryInfoA(m_handle, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &dwCode, &szCode, NULL);
+	::HttpQueryInfoA(handle, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &dwCode, &szCode, NULL);
 	return dwCode;
 }
 
-string WinINet::readData()
+string WinINet::readData(HINTERNET handle)
 {
 	DWORD dwSize = 0;
 	DWORD dwReaded = 0;
@@ -228,7 +226,10 @@ string WinINet::readData()
 	do {
 		dwReaded = 0;
 		memset(pBuff, 0, READ_BUFFSIZE + 1);
-		::InternetReadFile(m_handle, pBuff, READ_BUFFSIZE, &dwReaded);
+		::InternetReadFile(handle, pBuff, READ_BUFFSIZE, &dwReaded);
+
+		m_logger->Log("[WinINet] ReadData::InternetReadFile() : deRead[%d]", dwReaded);		
+
 		if (dwReaded <= 0) {
 			break;
 		}

@@ -12,7 +12,7 @@ public:
 
 	static std::string encode(const std::string& url);
 	static std::string decode(const std::string& url);
-	static std::string encodeFromMap(std::map<std::string, std::string>& data);
+	static std::string encodeFromMap(const std::map<std::string, std::string>& data);
 	//static std::map<std::string, std::string> decodeToMap(const std::string& data);
 
 private:

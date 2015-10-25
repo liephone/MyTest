@@ -23,10 +23,10 @@ string URLCodec::decode(const string& url)
 	return out;
 }
 
-string URLCodec::encodeFromMap(map<string, string>& data)
+string URLCodec::encodeFromMap(const map<string, string>& data)
 {
 	string ret;
-	map<string, string>::iterator it;
+	map<string, string>::const_iterator it;
 	for (it = data.begin(); it != data.end(); it++) {
 		if (!ret.empty()) {
 			ret.append("&");

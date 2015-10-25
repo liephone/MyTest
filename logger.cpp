@@ -10,7 +10,7 @@ using namespace std;
 /*
  * TODO
  * - thread safe
- * - independent on os
+ * - os independent
  */
 
 

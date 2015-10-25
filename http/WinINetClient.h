@@ -5,6 +5,7 @@
 #include <wininet.h>		// Wininet.lib
 #include <string>
 #include <map>
+#include "HttpHandler.h"
 
 #pragma comment(lib, "Wininet.lib")
 
@@ -13,23 +14,22 @@ class LogUtil;
 class WinINet 
 {
 public:
-	WinINet(HINTERNET handle = NULL);
+	explicit WinINet(HINTERNET handle = NULL);
 	~WinINet();
 
 	std::string Get(const std::string& url);
-	std::string Post(const std::string& url, std::map<std::string, std::string>& data);
+	std::string Post(const std::string& url, const std::map<std::string, std::string>& data);
 
 private:
 	std::string post(const std::string& url, const std::string& data);
 
 	bool open();
-	void close();
-	int getStatusCode();
-	std::string readData();
+	int getStatusCode(HINTERNET handle);
+	std::string readData(HINTERNET handle);
 	void parseUrl(const std::string& url, std::string &protocol, std::string &server, std::string &path, std::string &param, int &port);
 
 private:
-	HINTERNET m_handle;
+	HttpHandler m_session;
 	LogUtil* m_logger;
 };
 

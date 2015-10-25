@@ -7,7 +7,7 @@ using namespace std;
 
 #pragma comment(lib, "Shell32.lib")
 
-#include "SafeHardHSM.h"
+//#include "SafeHardHSM.h"
 
 
 struct ck_c_initialize_args {
@@ -30,12 +30,9 @@ int main()
 		printf("fail: get folder...\n");
 	} else {
 		_tprintf(_T("program files folder: [%s]\n"), tszPath);
-		_tcscat_s(tszPath, MAX_PATH, _T("\\wizvera\\safehard\\SafehardHSM.dll"));
+		_tcscat_s(tszPath, MAX_PATH, _T("\\com0com\\setupc.exe"));
 		_tprintf(_T("module path: [%s]\n"), tszPath);
 	}
-
-	SAFEHARD_ARGS sf_args;
-
 
 
 	return 0;
