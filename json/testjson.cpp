@@ -59,7 +59,6 @@ int main()
 
 				map<string, string> datamap;
 				for (int j = 0; j < keys.size(); j++) {
-					printf("%s\n", keys.at(j).c_str());
 					string val = "";
 					if (data[i].get(keys.at(j), 100).isInt()) {
 						char buff[32] = {0, };
@@ -68,7 +67,9 @@ int main()
 					} else if (data[i].get(keys.at(j), 100).isString()) {
 						val = data[i].get(keys.at(j), 100).asString();
 					} else if (data[i].get(keys.at(j), 100).isArray()) {
-						val = "is array";
+						printf("\n");
+
+						val = "[array]";
 						// menu_data
 						Json::Value menus = data[i][keys.at(j)];
 						int menu_count = menus.size();
@@ -80,25 +81,24 @@ int main()
 
 							map<string, string> menumap;
 							for (int n = 0; n < mkeys.size(); n++) {
-								printf("\t%s\n", mkeys.at(j).c_str());
-
 								string mval = "";
 								if (menus[m].get(mkeys.at(n), 100).isInt()) {
 									char buff2[32] = {0, };
-									int iVal2 = menu[m].get(mkeys.at(n), 100).asInt();
+									int iVal2 = menus[m].get(mkeys.at(n), 100).asInt();
 									mval = itoa(iVal2, buff2, 10);
 								} else if (menus[m].get(mkeys.at(n), 100).isString()) {
 									mval = menus[m].get(mkeys.at(n), 100).asString();
 								} 
+								printf("%s : %s\n", mkeys.at(n).c_str(), mval.c_str());
+								//menumap[mkeys.at(n)] = mval;
 							}
-
-							printf("\t%s\n", mval.c_str());
+							//m_menudata.push_back(menumap);
 						}
 					}
-					printf("%s\n", val.c_str());
-					//datamap[keys.at(j)] = data[i].get(keys.at(j), 100).asString();
+					printf("%s : %s\n", keys.at(j).c_str(), val.c_str());
+					//datamap[keys.at(j)] = val;
 				}
-				//m_results.push_back(datamap);
+				//m_data.push_back(datamap);
 			}
 		}
 
