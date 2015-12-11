@@ -32,6 +32,8 @@ int main()
 
 	cout << sizeof(_LONGLONG) << endl;
 	cout << sizeof(long) << endl;
+	cout << sizeof(int) << endl;
+	cout << sizeof(unsigned int) << endl;
 
 
 	return 0;
